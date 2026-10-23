@@ -1,6 +1,6 @@
 [package]
 name = "qwen35-harness"
-version = "0.7.1"
+version = "0.8.0"
 description = "Ruan's Harness: sandboxed, token-lean agent harness for a self-hosted LLM"
 license = "MIT"
 repository = "https://github.com/roekels/private-llm-harness"
@@ -29,6 +29,8 @@ security-framework = "3.7.0"
 uuid = { version = "1.28.0", features = ["v4"] }
 libc = "0.2.191"
 sha2 = "0.11.1"
+tauri-plugin-updater = "2.14.0"
+time = { version = "0.3.55", features = ["formatting"] }
 
 # Size settings: https://tauri.app/concept/size/
 [profile.release]
@@ -45,3 +47,5 @@ strip = false
 
 [dev-dependencies]
 tokio = { version = "1.54.1", features = ["rt-multi-thread", "macros"] }
+# Mock runtime for examples/update.rs.
+tauri = { version = "2", features = ["test"] }

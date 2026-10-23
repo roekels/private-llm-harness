@@ -16,6 +16,7 @@ use crate::secrets::{self, KEYCHAIN_SERVICE, KeyRef, SecretCache};
 use crate::store::{MessageRow, SessionRow, Store};
 use crate::tools::{Approvals, ToolSettings, Workspace};
 use crate::setup::{Report, SelfTest, Setup};
+use crate::updates::{self, Available, UpdateEvent, Updates};
 use crate::vm::{EnsureOpts, Patch, Vm, VmStatus};
 
 pub struct AppState {
@@ -29,6 +30,7 @@ pub struct AppState {
     pub home: PathBuf,
     pub vm: Vm,
     pub setup: Setup,
+    pub updates: Updates,
 }
 
 impl AppState {
@@ -551,4 +553,59 @@ fn check_account(account: &str) -> Result<String> {
         return Err(msg("Keychain account must be 1 to 64 letters, digits or dashes."));
     }
     Ok(a.to_string())
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateStatus {
+    current: &'static str,
+    /// False for dev builds and builds without an update key; `reason` says why.
+    supported: bool,
+    reason: Option<String>,
+    auto_check: bool,
+    /// Last successful check, ms since the epoch.
+    last_check: Option<i64>,
+}
+
+#[tauri::command]
+pub fn update_status(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<UpdateStatus> {
+    let store = state.store();
+    let reason = updates::unsupported_reason(&app);
+    Ok(UpdateStatus {
+        current: env!("CARGO_PKG_VERSION"),
+        supported: reason.is_none(),
+        reason,
+        auto_check: store.setting(updates::AUTO_CHECK)?.as_deref() != Some("0"),
+        last_check: store.setting(updates::LAST_CHECK)?.and_then(|v| v.parse().ok()),
+    })
+}
+
+/// Ask GitHub for a newer release. Nothing is downloaded yet.
+#[tauri::command]
+pub async fn update_check(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<Option<Available>> {
+    let found = state.updates.check(&app).await.map_err(msg)?;
+    state.store().set_setting(updates::LAST_CHECK, &crate::clock::now_ms().to_string())?;
+    Ok(found)
+}
+
+/// Download, verify and install the update from the last check. Restart to run it.
+#[tauri::command]
+pub async fn update_install(app: tauri::AppHandle, state: State<'_, AppState>, on_event: Channel<UpdateEvent>) -> Result<String> {
+    let on = |e: UpdateEvent| {
+        let _ = on_event.send(e);
+    };
+    state.updates.install(&app, &on).await.map_err(msg)
+}
+
+#[tauri::command]
+pub fn update_restart(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<()> {
+    if state.generation.busy() {
+        return Err(msg("A reply is still being written. Stop it or wait, then restart."));
+    }
+    app.restart()
+}
+
+#[tauri::command]
+pub fn update_settings_set(state: State<'_, AppState>, auto_check: bool) -> Result<()> {
+    state.store().set_setting(updates::AUTO_CHECK, if auto_check { "1" } else { "0" })
 }

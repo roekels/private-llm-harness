@@ -62,6 +62,12 @@ Ollama (`http://127.0.0.1:11434/v1`), LM Studio (`http://127.0.0.1:1234/v1`) and
 
 ## 4. Get the app
 
+### Download a release
+
+Download `Ruans-Harness_<version>_aarch64.dmg` from [Releases](https://github.com/roekels/private-llm-harness/releases), open it and drag **Ruan's Harness** to **Applications**. See the Gatekeeper note below for the first launch.
+
+After that, the app updates itself: **About > Updates** shows a new version, and **Install update** downloads it, checks its signature and replaces the app.
+
 ### Build from source
 
 ```bash

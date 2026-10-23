@@ -7,6 +7,7 @@
   import type { AboutInfo } from "../types";
   import logo from "../../assets/logo.png";
   import { CHANNEL } from "../release";
+  import UpdateCard from "./UpdateCard.svelte";
 
   let info = $state<AboutInfo | null>(null);
   let error = $state("");
@@ -38,6 +39,8 @@
         <p class="muted">A sandboxed, token-lean agent harness for a self-hosted model. Tauri 2, Rust, Svelte 5 and TypeScript.</p>
       </div>
     </article>
+
+    <UpdateCard />
 
     <article class="card wide">
       <h2>How it fits together</h2>

@@ -14,6 +14,9 @@ import type {
   SetupReport,
   SessionSummary,
   ToolSettings,
+  UpdateAvailable,
+  UpdateEvent,
+  UpdateStatus,
   VmStatus,
 } from "./types";
 
@@ -79,6 +82,16 @@ export const api = {
   runPatch: (id: string, onLine: (line: string) => void) =>
     invoke<Patch>("patch_run", { id, onLine: lineChannel(onLine) }),
   vmRebuild: (onLine: (line: string) => void) => invoke<VmStatus>("vm_rebuild", { onLine: lineChannel(onLine) }),
+
+  updateStatus: () => invoke<UpdateStatus>("update_status"),
+  updateCheck: () => invoke<UpdateAvailable | null>("update_check"),
+  updateInstall: (onEvent: (e: UpdateEvent) => void) => {
+    const channel = new Channel<UpdateEvent>();
+    channel.onmessage = onEvent;
+    return invoke<string>("update_install", { onEvent: channel });
+  },
+  updateRestart: () => invoke<void>("update_restart"),
+  updateSettingsSet: (autoCheck: boolean) => invoke<void>("update_settings_set", { autoCheck }),
 };
 
 /** Tauri rejects with the Rust error string. */

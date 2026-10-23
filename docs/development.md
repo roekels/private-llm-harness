@@ -42,22 +42,32 @@ cargo run --example vm -- status | patches | rebuild | browser
 
 # The app's real VM and setup checks (download verifies but never installs)
 cargo run --example setup -- report | download | selftest | devtools | redact
+
+# Self-update on a mock runtime (no window, no app data): check, verify, swap a test .app
+cargo run --example update -- <latest.json URL> <public key> <path/to/Test.app> [current version]
 ```
 
 With a `keychain:` key, macOS asks once to let the example read the item. Choose **Allow**.
 
+## Build an installer
+
+```bash
+CI=true npm run tauri build
+```
+
+`CI=true` skips the Finder styling of the disk image, which would need Automation permission. The `.app` and `.dmg` are in `src-tauri/target/release/bundle/`. This build has no update files, so it needs no signing key.
+
 ## Release
+
+Releases on GitHub are what the app updates itself to. See [updates.md](updates.md) for how it works.
 
 1. Bump the version in `package.json`, `src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json` (numbers only; macOS bundle versions must be numeric).
 2. Set `CHANNEL` in `src/lib/release.ts` (for example `"Beta"`, or `""` for a stable release).
-3. Build:
+3. Add a `## X.Y.Z` section to `CHANGELOG.md`. It becomes the release notes in the app.
+4. Commit and push to `main`.
+5. Run `scripts/release.sh X.Y.Z`. It checks the versions and the tree, builds with the signing key, writes `latest.json`, shows the files and asks before it publishes the GitHub release.
 
-   ```bash
-   CI=true npm run tauri build
-   ```
-
-   `CI=true` skips the Finder styling of the disk image, which would need Automation permission.
-4. The `.app` and `.dmg` are in `src-tauri/target/release/bundle/`.
+The signing key comes from `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. With `op-claude` and a `.env` of `op://` references, the script reads them from 1Password.
 
 The bundle is ad-hoc signed (`bundle.macOS.signingIdentity: "-"`), so it is sealed as a whole but has no Apple developer identity. Keep that setting: without it, another Mac may call the app "damaged" instead of offering **Open Anyway**.
 

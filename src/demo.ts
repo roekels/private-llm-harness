@@ -164,6 +164,13 @@ const page = `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="768" 
 
 const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
   "plugin:app|version": () => "0.7.1",
+  update_status: () => ({ current: "0.7.1", supported: true, autoCheck: true, lastCheck: T0 - 3 * min }),
+  // Add &update to the URL to show an available update.
+  update_check: () =>
+    new URLSearchParams(location.search).has("update")
+      ? { version: "0.8.0", date: "2026-10-23T12:00:00Z", notes: "- Check for updates: the app updates itself from GitHub releases.\n- Signed updates, verified before install." }
+      : null,
+  update_install: () => new Promise((r) => setTimeout(() => r("0.8.0"), 1500)),
   bootstrap: () => ({
     profiles: [profile],
     activeId: "local",

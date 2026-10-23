@@ -4,6 +4,7 @@
   import { loadSessions } from "./lib/chat.svelte";
   import { checkNow, watchFocus } from "./lib/connection.svelte";
   import { watchVm } from "./lib/vm.svelte";
+  import { watchUpdates } from "./lib/updates.svelte";
   import { app } from "./lib/state.svelte";
   import Sidebar from "./lib/components/Sidebar.svelte";
   import TopBar from "./lib/components/TopBar.svelte";
@@ -15,6 +16,7 @@
   import About from "./lib/components/About.svelte";
   import MemoryPane from "./lib/components/MemoryPane.svelte";
   import Setup from "./lib/components/Setup.svelte";
+  import UpdateBanner from "./lib/components/UpdateBanner.svelte";
 
   onMount(() => {
     api
@@ -39,9 +41,11 @@
       });
     const stopVm = watchVm();
     const stopFocus = watchFocus();
+    const stopUpdates = watchUpdates();
     return () => {
       stopVm();
       stopFocus();
+      stopUpdates();
     };
   });
 </script>
@@ -57,6 +61,7 @@
       <Setup />
     {:else}
       <TopBar />
+      <UpdateBanner />
       <MessageList />
       <Composer />
       <StatusBar />

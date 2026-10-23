@@ -7,6 +7,7 @@
   import { activeProfile, app } from "../state.svelte";
   import logo from "../../assets/logo.png";
   import { CHANNEL } from "../release";
+  import { update } from "../updates.svelte";
 
   let version = $state("");
   onMount(() => {
@@ -134,7 +135,8 @@
       class="item"
       class:on={app.view === "about"}
       aria-current={app.view === "about" ? "page" : undefined}
-      onclick={() => (app.view = app.view === "about" ? "chat" : "about")}>About</button
+      onclick={() => (app.view = app.view === "about" ? "chat" : "about")}
+      >About{#if update.available}<span class="attn" title="An update is available"></span>{/if}</button
     >
     <div class="credit">
       <span>Developed by Ruan · 2026</span>

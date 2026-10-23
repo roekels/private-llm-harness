@@ -65,6 +65,10 @@ The UI renders model and web output as text, never as HTML.
 - Sent only to the profile's pinned address: no proxy, no redirects, no public hosts unless allowed, and then only over https.
 - Masked in errors and logs.
 
+## App updates
+
+Updates come from this repo's GitHub releases. Each one is signed with a minisign key that is kept in 1Password, never in the repo. The app has only the public key and installs an update only when its signature is valid, the signature names the same version, and the version is newer. Install asks first, and macOS asks for a password if /Applications isn't writable. Details: [updates.md](updates.md).
+
 ## Installing Apple container
 
 Setup downloads the installer only from GitHub hosts over https. Before installing it checks the size, the SHA-256 against GitHub's digest, Apple's Developer ID team (`UPBK2H6LZM`, pinned), notarization and Gatekeeper. It installs through macOS's own administrator dialog. A package that fails any check is never installed.

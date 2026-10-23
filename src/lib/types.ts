@@ -246,3 +246,24 @@ export type ChatEvent =
   | { type: "toolRunning"; callId: string }
   | { type: "toolDone"; message: Message }
   | { type: "error"; message: string };
+
+/** Self-update (updates.rs). */
+export interface UpdateStatus {
+  current: string;
+  supported: boolean;
+  reason?: string | null;
+  autoCheck: boolean;
+  lastCheck?: number | null;
+}
+
+export interface UpdateAvailable {
+  version: string;
+  notes?: string | null;
+  /** RFC 3339. */
+  date?: string | null;
+}
+
+export type UpdateEvent =
+  | { type: "downloading"; received: number; total?: number | null }
+  | { type: "installing" }
+  | { type: "installed"; version: string };

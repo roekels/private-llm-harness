@@ -6,7 +6,7 @@ It was tuned for Qwen3.6-35B-A3B on llama.cpp's `llama-server`, but it works wit
 
 ![Chat with a tool call and the sandbox browser](docs/screenshots/chat.png)
 
-Status: **0.7.1 Beta**. macOS on Apple silicon only.
+Status: **0.8.0 Beta**. macOS on Apple silicon only.
 
 ## What it does
 
@@ -17,6 +17,7 @@ Status: **0.7.1 Beta**. macOS on Apple silicon only.
 - **Lean on tokens**: a fixed prompt start so llama.cpp can reuse its cache, clipped tool output, and automatic compaction with a session memory when a chat passes half the context window.
 - **Keys** stay in the macOS Keychain. The UI never sees them.
 - **Setup assistant** that installs or upgrades Apple `container` (signature checked), builds the sandbox and runs the isolation check.
+- **Updates in the app**: it checks GitHub releases, verifies the signed update and replaces itself. No manual download.
 
 ## How it fits together
 
@@ -39,7 +40,7 @@ The full step by step guide, for you or your coding agent, is in **[docs/getting
 
 1. Run an OpenAI-compatible model server you can reach from your Mac (for example `llama-server --jinja --alias local`).
 2. Install Node 22, Rust and the Xcode Command Line Tools.
-3. Clone and run:
+3. Download the `.dmg` from [Releases](https://github.com/roekels/private-llm-harness/releases), or clone and run:
 
    ```bash
    git clone https://github.com/roekels/private-llm-harness.git
@@ -79,7 +80,9 @@ The full step by step guide, for you or your coding agent, is in **[docs/getting
 | [docs/architecture.md](docs/architecture.md) | How the app, model and VM work together; the token budget |
 | [docs/security.md](docs/security.md) | What the sandbox blocks, how keys are kept, the threat model |
 | [docs/development.md](docs/development.md) | Build, test, CLI examples, release |
+| [docs/updates.md](docs/updates.md) | How the app updates itself, and how releases are made |
 | [docs/roadmap.md](docs/roadmap.md) | What is done and what is next |
+| [CHANGELOG.md](CHANGELOG.md) | What changed in each version |
 | [AGENTS.md](AGENTS.md) | Rules for coding agents working on this repo |
 
 ## License

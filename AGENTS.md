@@ -1,6 +1,6 @@
 # Ruan's Harness (repo private-llm-harness)
 
-A token-lean agent harness for a self-hosted, OpenAI-compatible model: chat, sessions, and terminal and browser tools in an isolated Linux VM. macOS desktop app on Apple silicon. Status: 0.7.1 Beta.
+A token-lean agent harness for a self-hosted, OpenAI-compatible model: chat, sessions, and terminal and browser tools in an isolated Linux VM. macOS desktop app on Apple silicon. Status: 0.8.0 Beta. It updates itself from signed GitHub releases.
 
 If `private/AGENTS-private.md` exists (it is gitignored), read it too: it holds the maintainer's own setup notes.
 
@@ -8,7 +8,7 @@ If `private/AGENTS-private.md` exists (it is gitignored), read it too: it holds 
 
 - Tauri v2. Rust core in `src-tauri/`, Svelte 5 + TypeScript UI in `src/`, built with Vite.
 - Docs: `docs/getting-started.md` (setup), `docs/architecture.md` (design, token budget), `docs/security.md` (sandbox, keys), `docs/development.md` (checks, examples, release), `docs/roadmap.md`.
-- Rust: `commands.rs` (all IPC), `chat.rs` (turn loop, budget, compaction, SSE), `tools.rs` (tools, macOS sandbox, path guard, clipping), `vm.rs` (sandbox VM, patches, self-test), `setup.rs` (verified install of Apple container), `secrets.rs`, `net.rs` (host policy, probe), `store.rs` (SQLite, migrations by `user_version`), `profile.rs`.
+- Rust: `commands.rs` (all IPC), `chat.rs` (turn loop, budget, compaction, SSE), `tools.rs` (tools, macOS sandbox, path guard, clipping), `vm.rs` (sandbox VM, patches, self-test), `setup.rs` (verified install of Apple container), `updates.rs` (self-update), `secrets.rs`, `net.rs` (host policy, probe), `store.rs` (SQLite, migrations by `user_version`), `profile.rs`.
 - UI: `api.ts` wraps every command; `chat.svelte.ts` session and send actions; `connection.svelte.ts` polls status; `state.svelte.ts` app state; `format.ts` renders text only; `theme.css` holds the color tokens.
 - `sandbox/`: the VM image. `skills/`: notes for the model's `skill` tool. Both are compiled in with `include_str!`.
 
@@ -39,6 +39,7 @@ Run the checks after every change. CLI examples (`probe`, `chat`, `vm`, `setup`)
 - Use the CSS variables from `theme.css`, never raw hex in components.
 - Don't rename the bundle id `com.dewit.qwen35-harness` or the Keychain service `qwen35-harness`: existing data and keys depend on them.
 - The container installer must pass every check in `setup::verify_pkg`. Never relax them.
+- Updates: never change `plugins.updater.pubkey`, turn off `requireSignedVersion`, or give the webview an `updater:` permission. Releases go out only through `scripts/release.sh`, and only when Ruan asks (it publishes).
 - The model's VM user (`agent`) has no caps and no sudo. Only the app execs as root.
 
 ## Gotchas
@@ -62,4 +63,6 @@ Run the checks after every change. CLI examples (`probe`, `chat`, `vm`, `setup`)
 - `sandbox-exec` is deprecated but works. zsh needs `-o nobgnice` inside it.
 - A tool denial ends the turn on purpose: retrying without tools would change the prompt start and lose the cache.
 - `tauri dev` restarts the app when Rust files change, including DB migrations.
+- `Update::install` may show the password prompt on the main thread, so it runs in `spawn_blocking`. Never call it on the main thread.
+- `createUpdaterArtifacts` stays off in `tauri.conf.json`; `release.sh` turns it on. With it on, every build needs the signing key.
 - Async Tauri commands must be `Send`. Callbacks passed across `.await` need `+ Sync`.

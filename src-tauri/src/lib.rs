@@ -10,6 +10,7 @@ pub mod secrets;
 pub mod setup;
 pub mod store;
 pub mod tools;
+pub mod updates;
 pub mod vm;
 
 mod commands;
@@ -23,6 +24,7 @@ use commands::AppState;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             let data = app.path().app_data_dir()?;
             let config = app.path().app_config_dir()?;
@@ -46,6 +48,7 @@ pub fn run() {
                     vm
                 },
                 setup: setup::Setup::default(),
+                updates: updates::Updates::default(),
                 workspaces,
                 home: app.path().home_dir()?,
             });
@@ -89,6 +92,11 @@ pub fn run() {
             commands::setup_seen,
             commands::browser_view,
             commands::browser_user,
+            commands::update_status,
+            commands::update_check,
+            commands::update_install,
+            commands::update_restart,
+            commands::update_settings_set,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

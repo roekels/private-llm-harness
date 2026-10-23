@@ -127,6 +127,11 @@ impl Generation {
         Ok((SlotGuard(self), rx))
     }
 
+    /// A reply is being generated.
+    pub fn busy(&self) -> bool {
+        self.lock().is_some()
+    }
+
     /// Returns true if a generation was running.
     pub fn stop(&self) -> bool {
         match self.lock().as_ref() {

@@ -25,6 +25,7 @@ Rule: keys, model HTTP, processes, files and the browser live in Rust. The webvi
 | `src-tauri/src/tools.rs` | Tool schemas, approvals, macOS sandbox, path guard, output clipping, skills |
 | `src-tauri/src/vm.rs` | Sandbox VM: build, start, exec, firewall, patches, self-test |
 | `src-tauri/src/setup.rs` | Setup assistant: checks, verified download and install of Apple container |
+| `src-tauri/src/updates.rs` | Self-update from GitHub releases (Tauri updater plugin, Rust only) |
 | `src-tauri/src/net.rs` | Host policy and connection check |
 | `src-tauri/src/secrets.rs` | Key references and resolution |
 | `src-tauri/src/store.rs` | SQLite store, migrations by `user_version` |
