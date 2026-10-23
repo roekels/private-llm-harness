@@ -3,6 +3,7 @@
   import { checkNow } from "../connection.svelte";
   import { app, blankProfile } from "../state.svelte";
   import SandboxPanel from "./SandboxPanel.svelte";
+  import PromptSkills from "./PromptSkills.svelte";
   import type { KeyRef, Profile } from "../types";
 
   type Source = "env" | "keychain" | "none";
@@ -129,6 +130,8 @@
   // Tool settings are global and save as soon as they change.
   let toolNote = $state("");
   async function saveTools(): Promise<void> {
+    const n = Math.round(Number(app.tools.maxSteps));
+    app.tools.maxSteps = Number.isFinite(n) ? Math.min(200, Math.max(1, n)) : 16;
     try {
       await api.setToolSettings($state.snapshot(app.tools));
       toolNote = "Saved. Applies from the next message.";
@@ -311,6 +314,11 @@
           Limit bursts (anti-block)
           <small>At most 20 new connections per second to any one site; the rest is refused inside the VM. Normal browsing stays well under this, but a runaway loop can't hammer a site and get your address blocked.</small>
         </label>
+        <label class="steps">
+          Tool rounds before asking to continue
+          <input type="number" min="1" max="200" step="1" bind:value={app.tools.maxSteps} onchange={saveTools} disabled={!app.tools.enabled} />
+          <small>After this many rounds of tool calls in one reply, the model pauses and you choose Continue or stop. 1 to 200; 16 is the default. Approve until done still pauses here.</small>
+        </label>
         <p class="hint">
           {app.tools.backend === "vm"
             ? "Commands, reads and writes run in the Linux VM as an unprivileged user, in /work/<session>. Only that folder is shared with this Mac. Commands stop after 60 seconds."
@@ -320,6 +328,7 @@
       </fieldset>
       <SandboxPanel onchange={saveTools} />
     </section>
+    <PromptSkills />
     </div>
   </div>
 </section>
@@ -472,6 +481,10 @@
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
     gap: var(--space-3);
+  }
+
+  .steps input {
+    max-width: 120px;
   }
 
   .check {

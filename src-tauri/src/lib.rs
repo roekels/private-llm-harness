@@ -1,6 +1,7 @@
 // Privileged work lives here, behind narrow commands (see docs/architecture.md).
 // The webview never receives a secret.
 
+pub mod audit;
 pub mod chat;
 pub mod clock;
 pub mod error;
@@ -92,6 +93,11 @@ pub fn run() {
             commands::setup_seen,
             commands::browser_view,
             commands::browser_user,
+            commands::open_url,
+            commands::prompt_view,
+            commands::skills_list,
+            commands::skills_save,
+            commands::session_export,
             commands::update_status,
             commands::update_check,
             commands::update_install,

@@ -13,6 +13,9 @@ import type {
   SelfTest,
   SetupReport,
   SessionSummary,
+  Skill,
+  SkillsView,
+  PromptView,
   ToolSettings,
   UpdateAvailable,
   UpdateEvent,
@@ -56,9 +59,14 @@ export const api = {
     return invoke<void>("session_compact", { sessionId, onEvent: channel });
   },
   setMemory: (id: string, memory: string) => invoke<void>("session_set_memory", { id, memory }),
-  decideTool: (callId: string, approve: boolean) => invoke<boolean>("tool_decide", { callId, approve }),
+  decideTool: (callId: string, approve: boolean, untilDone = false) => invoke<boolean>("tool_decide", { callId, approve, untilDone }),
   setToolSettings: (settings: ToolSettings) => invoke<void>("tool_settings_set", { settings }),
   revealWorkspace: (sessionId: string) => invoke<void>("workspace_reveal", { sessionId }),
+  /** Full history as CSV in ~/Downloads. Returns the file path. */
+  exportSession: (sessionId: string) => invoke<string>("session_export", { sessionId }),
+  promptView: (sessionId: string | null) => invoke<PromptView>("prompt_view", { sessionId }),
+  skills: () => invoke<SkillsView>("skills_list"),
+  saveSkills: (skills: Skill[]) => invoke<Skill[]>("skills_save", { skills }),
   vmStatus: () => invoke<VmStatus>("vm_status"),
   vmSetup: (onProgress: (line: string) => void) => {
     const channel = new Channel<string>();
@@ -67,6 +75,8 @@ export const api = {
   },
   vmStop: () => invoke<VmStatus>("vm_stop"),
   /** Opens one of a fixed list of links (commands.rs LINKS). */
+  /** Opens an http(s) link from a reply in the default browser (Rust checks it). */
+  openUrl: (url: string) => invoke<void>("open_url", { url }),
   openLink: (name: "github" | "repo" | "model" | "base-model" | "llama-cpp" | "container" | string) => invoke<void>("open_link", { name }),
   aboutInfo: () => invoke<AboutInfo>("about_info"),
   setupReport: () => invoke<SetupReport>("setup_report"),

@@ -127,6 +127,18 @@ impl Store {
         self.set_setting(TOOL_SETTINGS, &serde_json::to_string(t)?)
     }
 
+    /// Skills the user added in Settings (built-ins live in tools::SKILLS).
+    pub fn custom_skills(&self) -> Result<Vec<crate::tools::CustomSkill>> {
+        Ok(match self.setting(CUSTOM_SKILLS)? {
+            Some(s) => serde_json::from_str(&s).unwrap_or_default(),
+            None => Vec::new(),
+        })
+    }
+
+    pub fn set_custom_skills(&self, skills: &[crate::tools::CustomSkill]) -> Result<()> {
+        self.set_setting(CUSTOM_SKILLS, &serde_json::to_string(skills)?)
+    }
+
     /// Built-in patches first (their script always from the app), then custom ones.
     pub fn patches(&self) -> Result<Vec<Patch>> {
         let stored: Vec<Patch> = match self.setting(PATCHES)? {
@@ -413,6 +425,7 @@ impl Store {
 pub const NEW_SESSION_TITLE: &str = "New session";
 const TOOL_SETTINGS: &str = "tools";
 const PATCHES: &str = "patches";
+const CUSTOM_SKILLS: &str = "custom_skills";
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]

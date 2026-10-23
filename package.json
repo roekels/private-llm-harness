@@ -1,6 +1,6 @@
 {
   "name": "qwen35-harness",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "private": true,
   "license": "MIT",
   "repository": "github:roekels/private-llm-harness",
@@ -10,7 +10,8 @@
     "dev": "vite",
     "build": "vite build",
     "check": "svelte-check --tsconfig ./tsconfig.json",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "test": "node --experimental-strip-types --no-warnings scripts/test-markdown.mts"
   },
   "dependencies": {
     "@tauri-apps/api": "^2"

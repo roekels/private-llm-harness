@@ -46,13 +46,17 @@ When you choose it in Settings, commands run under `sandbox-exec` with a deny-by
 
 ## Approvals
 
-By default every `sh`, `write`, and browser `open`, `click`, `type` and `eval` call shows a card you approve or deny. Auto-approve is a setting. Denying ends the turn, so the model can't keep retrying.
+By default every `sh`, `write`, and browser `open`, `click`, `type` and `eval` call shows a card you approve or deny. **Approve until done** approves the rest of that one reply; the next message asks again. Auto-approve is a setting. Denying ends the turn, so the model can't keep retrying. The tool rounds limit (Settings) pauses long runs either way.
 
 ## Prompt injection
 
 The system prompt tells the model that only the user's messages are instructions, that pages, files and command output are untrusted data, never to reveal secrets, and to ask before irreversible steps. Browser text is marked as untrusted web content. This lowers the risk but doesn't remove it. The sandbox is what limits the damage.
 
-The UI renders model and web output as text, never as HTML.
+The UI renders model and web output as text, never as HTML. Markdown is parsed into a tree and drawn as elements and text nodes, so raw HTML in a reply shows as text. Links open only for http and https (checked again in Rust, no `user:password@`), in your default browser, when you click them.
+
+## Audit export
+
+**Audit** writes the session's full history to a CSV in ~/Downloads: system prompt, session memory, messages, reasoning, tool calls, results, approval type, outcome and timing. Images are noted, not embedded. Cells that start with `=`, `+`, `-` or `@` get a leading apostrophe so spreadsheet apps don't run model text as a formula. The file can hold anything the session saw, so treat it like the session itself.
 
 ## Browser DevTools redaction
 

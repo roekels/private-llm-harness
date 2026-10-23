@@ -59,7 +59,7 @@ export const app = $state({
   chatError: "",
 
   // Tools (M3)
-  tools: { enabled: true, autoApprove: false, network: true, backend: "vm", rateLimit: true } as ToolSettings,
+  tools: { enabled: true, autoApprove: false, network: true, backend: "vm", rateLimit: true, maxSteps: 16 } as ToolSettings,
   /** Calls in flight this turn, by call id. */
   pendingTools: {} as Record<string, PendingTool>,
   workspace: "",
@@ -69,6 +69,10 @@ export const app = $state({
   browserOpen: false,
   /** The session memory pane beside the chat. */
   memoryOpen: false,
+  /** "Approve until done" is on for the turn in progress. */
+  untilDone: false,
+  /** The last turn paused after this many tool rounds (shows Continue). */
+  paused: null as number | null,
   /** Setup has something to do (shown as a banner). */
   setupNeeded: false,
 });

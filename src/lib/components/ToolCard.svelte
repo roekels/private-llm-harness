@@ -26,7 +26,7 @@
   const status = $derived.by((): { text: string; tone: "ok" | "bad" | "wait" | "idle" } => {
     if (meta) {
       const secs = meta.durationMs != null ? ` · ${(meta.durationMs / 1000).toFixed(1)} s` : "";
-      const how = meta.approval === "auto" ? " · auto-approved" : "";
+      const how = meta.approval === "auto" ? " · auto-approved" : meta.approval === "turn" ? " · approved until done" : "";
       switch (meta.outcome) {
         case "ok":
           return { text: `${call.name === "sh" ? `Exit 0${secs}` : "Done"}${how}`, tone: "ok" };
@@ -94,6 +94,11 @@
     <div class="decide">
       <button class="btn-primary" onclick={() => decideTool(call.id, true)}>Approve</button>
       <button class="btn-secondary" onclick={() => decideTool(call.id, false)}>Deny</button>
+      <button
+        class="btn-secondary"
+        title="Approve this and every later step until the model gives its final answer. The next message asks again."
+        onclick={() => decideTool(call.id, true, true)}>Approve until done</button
+      >
       <span class="hint">Runs in this session's sandboxed folder.</span>
     </div>
   {/if}
@@ -197,6 +202,7 @@
 
   .decide {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: var(--space-2);
     margin-top: var(--space-2);

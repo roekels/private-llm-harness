@@ -62,6 +62,8 @@ export interface ToolSettings {
   backend: "vm" | "macos";
   /** Anti-block guard: at most 20 new connections per second per site (VM). */
   rateLimit: boolean;
+  /** Tool rounds per message before the app asks to continue (1 to 200). */
+  maxSteps: number;
 }
 
 export interface AboutInfo {
@@ -174,7 +176,8 @@ export interface ToolMeta {
   exitCode?: number | null;
   durationMs?: number;
   fullOutput?: string | null;
-  approval: "free" | "auto" | "user" | "none";
+  /** "turn": approved with Approve until done earlier in the turn. */
+  approval: "free" | "auto" | "turn" | "user" | "none";
 }
 
 /** Usage and flags on assistant messages (chat.rs Acc::meta). */
@@ -245,6 +248,7 @@ export type ChatEvent =
   | { type: "toolPending"; callId: string; name: string; arguments: string; needsApproval: boolean }
   | { type: "toolRunning"; callId: string }
   | { type: "toolDone"; message: Message }
+  | { type: "paused"; steps: number }
   | { type: "error"; message: string };
 
 /** Self-update (updates.rs). */
@@ -267,3 +271,21 @@ export type UpdateEvent =
   | { type: "downloading"; received: number; total?: number | null }
   | { type: "installing" }
   | { type: "installed"; version: string };
+
+/** A skill: built-in (skills/*.md) or the user's own (Settings). */
+export interface Skill {
+  name: string;
+  body: string;
+}
+
+export interface SkillsView {
+  builtin: Skill[];
+  custom: Skill[];
+}
+
+export interface PromptView {
+  /** What a session created now starts with. */
+  newSession: string;
+  /** The active session's stored prompt (fixed when it was created). */
+  session?: string | null;
+}

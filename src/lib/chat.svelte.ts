@@ -74,6 +74,8 @@ export async function send(text: string, images: string[]): Promise<boolean> {
 
   app.generating = true;
   app.chatError = "";
+  app.paused = null;
+  app.untilDone = false;
   app.streaming = { content: "", reasoning: "" };
 
   const onEvent = handler(sid);
@@ -90,6 +92,7 @@ export async function send(text: string, images: string[]): Promise<boolean> {
     app.compacting = false;
     app.streaming = null;
     app.pendingTools = {};
+    app.untilDone = false;
     if (app.tools.enabled && app.tools.backend === "vm") void refreshVm();
   }
 }
@@ -174,6 +177,9 @@ function handler(sid: string): (e: ChatEvent) => void {
         app.messages.push(e.message);
         if (e.message.toolCallId) delete app.pendingTools[e.message.toolCallId];
         break;
+      case "paused":
+        app.paused = e.steps;
+        break;
       case "error":
         app.chatError = e.message;
         break;
@@ -181,11 +187,19 @@ function handler(sid: string): (e: ChatEvent) => void {
   };
 }
 
-export async function decideTool(callId: string, approve: boolean): Promise<void> {
+/** `untilDone`: approve this and every later call until the model's final answer. */
+export async function decideTool(callId: string, approve: boolean, untilDone = false): Promise<void> {
   const t = app.pendingTools[callId];
   if (t?.state !== "waiting") return;
   t.state = approve ? "running" : "queued";
-  await api.decideTool(callId, approve);
+  if (approve && untilDone) app.untilDone = true;
+  await api.decideTool(callId, approve, untilDone);
+}
+
+/** After a pause at the round limit: let the model carry on. */
+export async function continueTurn(): Promise<void> {
+  if (app.paused == null || app.generating) return;
+  await send("Continue.", []);
 }
 
 export function stop(): void {

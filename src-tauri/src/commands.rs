@@ -14,7 +14,7 @@ use crate::net::{self, Probe};
 use crate::profile::Profile;
 use crate::secrets::{self, KEYCHAIN_SERVICE, KeyRef, SecretCache};
 use crate::store::{MessageRow, SessionRow, Store};
-use crate::tools::{Approvals, ToolSettings, Workspace};
+use crate::tools::{self, Approvals, CustomSkill, ToolSettings, Workspace};
 use crate::setup::{Report, SelfTest, Setup};
 use crate::updates::{self, Available, UpdateEvent, Updates};
 use crate::vm::{EnsureOpts, Patch, Vm, VmStatus};
@@ -158,7 +158,7 @@ pub fn sessions_list(state: State<'_, AppState>) -> Result<Vec<SessionRow>> {
 pub fn session_create(state: State<'_, AppState>) -> Result<SessionRow> {
     let store = state.store();
     let profile = store.active_profile_id()?;
-    let system = chat::system_prompt(crate::clock::now_ms());
+    let system = chat::system_prompt(crate::clock::now_ms(), &custom_skill_names(&store)?);
     store.create_session(&uuid::Uuid::new_v4().to_string(), profile.as_deref(), &system)
 }
 
@@ -269,9 +269,77 @@ pub fn chat_stop(state: State<'_, AppState>) -> bool {
 }
 
 /// Answer a pending approval prompt. Returns false if nothing was waiting.
+/// `until_done`: also approve every later call in this turn.
 #[tauri::command]
-pub fn tool_decide(state: State<'_, AppState>, call_id: String, approve: bool) -> bool {
-    state.approvals.decide(&call_id, approve)
+pub fn tool_decide(state: State<'_, AppState>, call_id: String, approve: bool, until_done: Option<bool>) -> bool {
+    state.approvals.decide(&call_id, approve, until_done.unwrap_or(false))
+}
+
+fn custom_skill_names(store: &Store) -> Result<Vec<String>> {
+    Ok(store.custom_skills()?.into_iter().map(|s| s.name).collect())
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PromptView {
+    /// What a session created now starts with.
+    new_session: String,
+    /// The stored prompt of the given session, if any (fixed at its creation).
+    session: Option<String>,
+}
+
+#[tauri::command]
+pub fn prompt_view(state: State<'_, AppState>, session_id: Option<String>) -> Result<PromptView> {
+    let store = state.store();
+    let session = match session_id {
+        Some(id) => store.session(&id)?.map(|(_, p)| p),
+        None => None,
+    };
+    Ok(PromptView { new_session: chat::system_prompt(crate::clock::now_ms(), &custom_skill_names(&store)?), session })
+}
+
+#[derive(Serialize)]
+pub struct SkillsView {
+    builtin: Vec<CustomSkill>,
+    custom: Vec<CustomSkill>,
+}
+
+#[tauri::command]
+pub fn skills_list(state: State<'_, AppState>) -> Result<SkillsView> {
+    Ok(SkillsView {
+        builtin: tools::SKILLS.iter().map(|(n, b)| CustomSkill { name: n.to_string(), body: b.trim().to_string() }).collect(),
+        custom: state.store().custom_skills()?,
+    })
+}
+
+/// Replace the user's own skills. New sessions list them in their system prompt.
+#[tauri::command]
+pub fn skills_save(state: State<'_, AppState>, skills: Vec<CustomSkill>) -> Result<Vec<CustomSkill>> {
+    if skills.len() > 50 {
+        return Err(msg("At most 50 skills."));
+    }
+    let mut seen = std::collections::HashSet::new();
+    let mut clean = Vec::with_capacity(skills.len());
+    for s in skills {
+        let s = CustomSkill { name: s.name.trim().to_string(), body: s.body.trim().to_string() };
+        tools::check_skill(&s).map_err(msg)?;
+        if !seen.insert(s.name.clone()) {
+            return Err(msg(format!("Two skills are called \"{}\".", s.name)));
+        }
+        clean.push(s);
+    }
+    state.store().set_custom_skills(&clean)?;
+    Ok(clean)
+}
+
+/// Export the session's full history as CSV to ~/Downloads. Returns the file path.
+#[tauri::command]
+pub fn session_export(state: State<'_, AppState>, session_id: String) -> Result<String> {
+    let store = state.store();
+    let (session, system) = store.session(&session_id)?.ok_or_else(|| msg("No such session."))?;
+    let messages = store.messages(&session_id, 0)?;
+    let path = crate::audit::export(&state.home.join("Downloads"), &session, &system, &messages)?;
+    Ok(path.display().to_string())
 }
 
 #[tauri::command]
@@ -489,6 +557,21 @@ const LINKS: [(&str, &str); 6] = [
     ("llama-cpp", "https://github.com/ggml-org/llama.cpp"),
     ("container", "https://github.com/apple/container"),
 ];
+
+/// Open an http(s) link from a reply in the default browser. The user clicked it;
+/// only plain web links pass (no other schemes, no user:password@).
+#[tauri::command]
+pub fn open_url(url: String) -> Result<()> {
+    let u = url::Url::parse(url.trim()).map_err(|_| msg("Not a valid link."))?;
+    if !matches!(u.scheme(), "http" | "https") || !u.username().is_empty() || u.password().is_some() || u.as_str().len() > 4096 {
+        return Err(msg("Only web links (http or https) can be opened."));
+    }
+    std::process::Command::new("/usr/bin/open")
+        .arg(u.as_str())
+        .spawn()
+        .map_err(|e| msg(format!("Could not open the browser: {e}")))?;
+    Ok(())
+}
 
 #[tauri::command]
 pub fn open_link(name: String) -> Result<()> {

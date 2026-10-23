@@ -15,6 +15,10 @@
 //!   --deny           with --tools: deny every call that needs approval
 //!   --net            with --tools: allow network in sh
 //!   --macos          with --tools: use the macOS sandbox instead of the VM
+//!   --until-done     with --tools: answer the first approval with "Approve until done"
+//!   --steps N        tool rounds before the turn pauses (default 16)
+//!   --skill NAME=TEXT add a custom skill (repeatable); listed in the system prompt
+//!   --export DIR     write the session's audit CSV to DIR at the end
 //!
 //! With --tools the workspace is a temp folder, removed at the end.
 //!
@@ -38,7 +42,10 @@ use tauri::ipc::{Channel, InvokeResponseBody};
 #[tokio::main]
 async fn main() {
     let mut args = std::env::args().skip(1).peekable();
-    let (mut tools, mut deny, mut net, mut macos) = (false, false, false, false);
+    let (mut tools, mut deny, mut net, mut macos, mut until_done) = (false, false, false, false, false);
+    let mut steps = None::<u32>;
+    let mut skills = Vec::new();
+    let mut export = None::<String>;
     let (mut url, mut model) = (None::<String>, None::<String>);
     let (mut key, mut think, mut stop_ms, mut ctx, mut image) = (
         "none".to_string(),
@@ -61,6 +68,14 @@ async fn main() {
             "--deny" => deny = true,
             "--net" => net = true,
             "--macos" => macos = true,
+            "--until-done" => until_done = true,
+            "--export" => export = args.next(),
+            "--steps" => steps = args.next().and_then(|v| v.parse().ok()),
+            "--skill" => {
+                let kv = args.next().expect("--skill NAME=TEXT");
+                let (n, b) = kv.split_once('=').expect("--skill NAME=TEXT");
+                skills.push(qwen35_harness_lib::tools::CustomSkill { name: n.into(), body: b.into() });
+            }
             _ => prompts.push(a),
         }
     }
@@ -79,7 +94,9 @@ async fn main() {
     let p = p.validate().expect("profile");
 
     let store = Mutex::new(Store::open_in_memory().expect("store"));
-    let system = chat::system_prompt(qwen35_harness_lib::clock::now_ms());
+    let names: Vec<String> = skills.iter().map(|s| s.name.clone()).collect();
+    let system = chat::system_prompt(qwen35_harness_lib::clock::now_ms(), &names);
+    store.lock().unwrap().set_custom_skills(&skills).expect("skills");
     store.lock().unwrap().create_session("cli", Some(&p.id), &system).expect("session");
     let secrets = SecretCache::default();
     let generation = Arc::new(Generation::default());
@@ -87,7 +104,7 @@ async fn main() {
     let workspaces = std::env::temp_dir().join(format!("qh-cli-{}", std::process::id()));
     let home = std::path::PathBuf::from(std::env::var("HOME").expect("HOME"));
     let backend = if macos { Backend::Macos } else { Backend::Vm };
-    let settings = ToolSettings { enabled: tools, auto_approve: false, network: net, backend, rate_limit: true };
+    let settings = ToolSettings { enabled: tools, auto_approve: false, network: net, backend, rate_limit: true, max_steps: steps.unwrap_or(16) };
     let vm = Vm::new(workspaces.clone(), std::env::temp_dir().join("qh-cli-build"));
     if tools && !macos {
         let opts = EnsureOpts { build: true, network: net, patches: Vec::new() };
@@ -110,6 +127,7 @@ async fn main() {
                 ),
                 Some("trimmed") => println!("[trimmed] window now starts at seq {}", v["trimSeq"]),
                 Some("error") => println!("\n[error] {}", v["message"]),
+                Some("paused") => println!("\n[paused] after {} tool rounds", v["steps"]),
                 Some("userSaved") => println!("[user seq {}]", v["message"]["seq"]),
                 Some("toolPending") => {
                     println!("\n[tool] {} {}", v["name"].as_str().unwrap_or(""), v["arguments"].as_str().unwrap_or(""));
@@ -118,8 +136,8 @@ async fn main() {
                         let (ap, id) = (ap.clone(), v["callId"].as_str().unwrap_or("").to_string());
                         std::thread::spawn(move || {
                             std::thread::sleep(Duration::from_millis(50));
-                            ap.decide(&id, !deny);
-                            println!("[{}]", if deny { "denied" } else { "approved" });
+                            ap.decide(&id, !deny, until_done);
+                            println!("[{}]", if deny { "denied" } else if until_done { "approved until done" } else { "approved" });
                         });
                     }
                 }
@@ -127,7 +145,7 @@ async fn main() {
                     let m = &v["message"];
                     let text = m["content"].as_str().unwrap_or("");
                     let short: String = text.chars().take(300).collect();
-                    println!("[result {}] {}", m["meta"]["outcome"], short.replace('\n', " | "));
+                    println!("[result {} via {}] {}", m["meta"]["outcome"], m["meta"]["approval"], short.replace('\n', " | "));
                 }
                 _ => {}
             }
@@ -166,6 +184,13 @@ async fn main() {
             println!("[failed] {e}");
         }
         drop(slot);
+    }
+    if let Some(dir) = export {
+        let st = store.lock().unwrap();
+        let (session, system) = st.session("cli").expect("db").expect("session");
+        let msgs = st.messages("cli", 0).expect("messages");
+        let path = qwen35_harness_lib::audit::export(Path::new(&dir), &session, &system, &msgs).expect("export");
+        println!("[exported] {}", path.display());
     }
     let _ = std::fs::remove_dir_all(&workspaces);
 }

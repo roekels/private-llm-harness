@@ -1,6 +1,6 @@
 # Ruan's Harness (repo private-llm-harness)
 
-A token-lean agent harness for a self-hosted, OpenAI-compatible model: chat, sessions, and terminal and browser tools in an isolated Linux VM. macOS desktop app on Apple silicon. Status: 0.8.0 Beta. It updates itself from signed GitHub releases.
+A token-lean agent harness for a self-hosted, OpenAI-compatible model: chat, sessions, and terminal and browser tools in an isolated Linux VM. macOS desktop app on Apple silicon. Status: 0.8.1 Beta. It updates itself from signed GitHub releases.
 
 If `private/AGENTS-private.md` exists (it is gitignored), read it too: it holds the maintainer's own setup notes.
 
@@ -32,10 +32,10 @@ Run the checks after every change. CLI examples (`probe`, `chat`, `vm`, `setup`)
 - Keep the prompt prefix stable: the system prompt and `tools::definitions()` are cached. Change them rarely, keep them short, never put the time or changing state in them. Times go on user messages (`stamped`).
 - Never edit or reorder sent history. Only `trim_seq` and `strip_seq` move, forward. `chat::render` depends only on stored messages and `strip_seq`.
 - The system prompt is stored per session at creation. Changing it only affects new sessions.
-- `skills/*.md`: adding one means the file, the `SKILLS` list and the schema enum (a test checks).
+- `skills/*.md`: adding a built-in means the file, the `SKILLS` list and its name in the `skill` schema description (a test checks). User skills live in the settings table (`custom_skills`); never add an enum to the `skill` schema, or each new user skill would change the cached prefix.
 - Qwen ignores soft hints. The system prompt says to call `skill` once per topic before first use. Keep it that direct.
 - `read`/`write` on the macOS backend run in the app: keep the path guard (`Workspace::resolve` + `check_real`) on every path.
-- Render model and web output as text. No `{@html}`.
+- Render model and web output as text. No `{@html}`. Markdown goes through `markdown.ts` + `Markdown.svelte` only; run `npm test` after touching the parser.
 - Use the CSS variables from `theme.css`, never raw hex in components.
 - Don't rename the bundle id `com.dewit.qwen35-harness` or the Keychain service `qwen35-harness`: existing data and keys depend on them.
 - The container installer must pass every check in `setup::verify_pkg`. Never relax them.

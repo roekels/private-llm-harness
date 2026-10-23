@@ -6,15 +6,17 @@ It was tuned for Qwen3.6-35B-A3B on llama.cpp's `llama-server`, but it works wit
 
 ![Chat with a tool call and the sandbox browser](docs/screenshots/chat.png)
 
-Status: **0.8.0 Beta**. macOS on Apple silicon only.
+Status: **0.8.1 Beta**. macOS on Apple silicon only.
 
 ## What it does
 
-- **Chat** with streaming replies, a Think toggle, images (paste, drop or attach), and live token and speed numbers.
+- **Chat** with streaming Markdown replies, a Think toggle, images (paste, drop or attach), and live token and speed numbers.
 - **Sessions** saved on your Mac, with automatic titles.
-- **Tools**: the model can run commands, read and write files, and use a headless browser (pages as text, clicks, typing, screenshots, network requests, console). Each command asks for your approval unless you turn on auto-approve.
+- **Tools**: the model can run commands, read and write files, and use a headless browser (pages as text, clicks, typing, screenshots, network requests, console). Each command asks for your approval: approve one step, or **Approve until done** for the rest of the reply. Auto-approve is a setting.
 - **Sandbox**: tools run in a Linux VM made with Apple's `container` tool. The VM sees only a work folder, never your Mac. Its firewall allows the internet (or nothing) but blocks your home network, Tailscale and the Mac itself. A built-in self-test proves it.
 - **Lean on tokens**: a fixed prompt start so llama.cpp can reuse its cache, clipped tool output, and automatic compaction with a session memory when a chat passes half the context window.
+- **Skills**: short best-practice notes the model fetches when needed. Add your own in Settings.
+- **Audit export**: one CSV of the whole session, every message, tool call and output.
 - **Keys** stay in the macOS Keychain. The UI never sees them.
 - **Setup assistant** that installs or upgrades Apple `container` (signature checked), builds the sandbox and runs the isolation check.
 - **Updates in the app**: it checks GitHub releases, verifies the signed update and replaces itself. No manual download.

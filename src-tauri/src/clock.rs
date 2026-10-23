@@ -15,6 +15,7 @@ struct Local {
     year: i32,
     hour: i32,
     min: i32,
+    sec: i32,
     zone: String,
 }
 
@@ -35,6 +36,7 @@ fn local(ms: i64) -> Local {
         year: 1900 + tm.tm_year,
         hour: tm.tm_hour,
         min: tm.tm_min,
+        sec: tm.tm_sec,
         zone,
     }
 }
@@ -50,6 +52,19 @@ pub fn short_stamp(ms: i64) -> String {
     let t = local(ms);
     let zone = if t.zone.is_empty() { String::new() } else { format!(" {}", t.zone) };
     format!("{} {} {} {} {:02}:{:02}{zone}", &DAYS[t.wday][..3], t.day, &MONTHS[t.month][..3], t.year, t.hour, t.min)
+}
+
+/// "2026-10-23 14:02:39 CEST", for exports.
+pub fn iso_stamp(ms: i64) -> String {
+    let t = local(ms);
+    let zone = if t.zone.is_empty() { String::new() } else { format!(" {}", t.zone) };
+    format!("{}-{:02}-{:02} {:02}:{:02}:{:02}{zone}", t.year, t.month + 1, t.day, t.hour, t.min, t.sec)
+}
+
+/// "20261023-140239", for file names.
+pub fn file_stamp(ms: i64) -> String {
+    let t = local(ms);
+    format!("{}{:02}{:02}-{:02}{:02}{:02}", t.year, t.month + 1, t.day, t.hour, t.min, t.sec)
 }
 
 pub fn now_ms() -> i64 {

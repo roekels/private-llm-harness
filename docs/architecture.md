@@ -26,6 +26,8 @@ Rule: keys, model HTTP, processes, files and the browser live in Rust. The webvi
 | `src-tauri/src/vm.rs` | Sandbox VM: build, start, exec, firewall, patches, self-test |
 | `src-tauri/src/setup.rs` | Setup assistant: checks, verified download and install of Apple container |
 | `src-tauri/src/updates.rs` | Self-update from GitHub releases (Tauri updater plugin, Rust only) |
+| `src-tauri/src/audit.rs` | Audit export: a session as CSV in ~/Downloads |
+| `src/lib/markdown.ts` | Markdown parser for replies; `Markdown.svelte` renders it as elements, never HTML |
 | `src-tauri/src/net.rs` | Host policy and connection check |
 | `src-tauri/src/secrets.rs` | Key references and resolution |
 | `src-tauri/src/store.rs` | SQLite store, migrations by `user_version` |
@@ -97,11 +99,15 @@ The status bar shows prompt tokens, cached tokens and tokens per second from lla
 | `read` | Read a file in the session folder | No |
 | `write` | Write a file in the session folder | Yes, unless auto-approve |
 | `browser` | `open`, `snapshot`, `click`, `type`, `scroll`, `back`, `screenshot`, `network`, `console`, `html`, `eval` | `open`, `click`, `type` and `eval` ask |
-| `skill` | Fetch a short best-practice note (terminal, files, browser, screenshot, research, python) | No |
+| `skill` | Fetch a short best-practice note: built-in (terminal, files, browser, screenshot, research, python) or your own from Settings | No |
 
 A denial ends the turn. Retrying without the tool would change the prompt and lose the cache.
 
-Up to 16 tool rounds run per message.
+**Approve until done** approves the call and every later one in the same turn, until the model's final answer. The flag lives in Rust (`Approvals`) and resets at the start and end of every turn. Those results are marked `turn` in their approval field.
+
+Up to 16 tool rounds run per message (Settings > Tools, 1 to 200). Then the turn ends with a `paused` event and the UI offers **Continue**, which sends "Continue." as a new message.
+
+Your own skills are stored in the settings table. A new session's system prompt lists their names (only when you have some, so the prompt for everyone else is unchanged), and `skill` looks the text up when it is called. The `skill` schema has no enum, so adding a skill never changes the cached tool schemas.
 
 ## Sandbox VM
 

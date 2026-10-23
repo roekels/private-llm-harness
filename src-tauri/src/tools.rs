@@ -15,7 +15,9 @@ use tokio::io::{AsyncRead, AsyncReadExt};
 use tokio::sync::{oneshot, watch};
 
 /// Most tool rounds per user message.
-pub const MAX_STEPS: usize = 16;
+/// Tool rounds per message before the app asks to continue (Settings, `max_steps`).
+pub const DEFAULT_STEPS: u32 = 16;
+pub const MAX_STEPS_LIMIT: u32 = 200;
 const SH_TIMEOUT: Duration = Duration::from_secs(60);
 /// Bytes kept per stream: the first CAPTURE_HEAD and the last CAPTURE_TAIL.
 const CAPTURE_HEAD: usize = 48 * 1024;
@@ -51,6 +53,8 @@ pub struct ToolSettings {
     pub backend: Backend,
     /// Anti-block guard in the VM: at most 20 new connections per second per site.
     pub rate_limit: bool,
+    /// Tool rounds per message before the app pauses and asks to continue.
+    pub max_steps: u32,
 }
 
 impl ToolSettings {
@@ -58,11 +62,16 @@ impl ToolSettings {
     pub fn rate_per_sec(&self) -> u32 {
         if self.rate_limit { crate::vm::RATE_LIMIT } else { 0 }
     }
+
+    /// `max_steps`, kept between 1 and MAX_STEPS_LIMIT.
+    pub fn steps(&self) -> usize {
+        self.max_steps.clamp(1, MAX_STEPS_LIMIT) as usize
+    }
 }
 
 impl Default for ToolSettings {
     fn default() -> Self {
-        Self { enabled: true, auto_approve: false, network: true, backend: Backend::Vm, rate_limit: true }
+        Self { enabled: true, auto_approve: false, network: true, backend: Backend::Vm, rate_limit: true, max_steps: DEFAULT_STEPS }
     }
 }
 
@@ -76,11 +85,48 @@ pub const SKILLS: [(&str, &str); 6] = [
     ("python", include_str!("../../skills/python.md")),
 ];
 
-pub fn skill_text(name: &str) -> ToolResult {
-    match SKILLS.iter().find(|(n, _)| *n == name.trim()) {
-        Some((_, body)) => ToolResult { text: body.trim().to_string(), ..ToolResult::simple(Outcome::Ok, "") },
+/// A skill the user added in Settings. Stored in the app's settings table.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CustomSkill {
+    pub name: String,
+    pub body: String,
+}
+
+pub const MAX_SKILL_CHARS: usize = 4000;
+
+/// Names: 2 to 32 characters, lowercase letters, digits and dashes, not a built-in name.
+pub fn check_skill(s: &CustomSkill) -> Result<(), String> {
+    let n = s.name.as_str();
+    let ok = (2..=32).contains(&n.len())
+        && n.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+        && !n.starts_with('-')
+        && !n.ends_with('-');
+    if !ok {
+        return Err("Skill names use 2 to 32 lowercase letters, digits and dashes, like \"git-commits\".".into());
+    }
+    if SKILLS.iter().any(|(b, _)| *b == n) {
+        return Err(format!("\"{n}\" is a built-in skill. Pick another name."));
+    }
+    if s.body.trim().is_empty() {
+        return Err("Write the skill's notes first.".into());
+    }
+    if s.body.chars().count() > MAX_SKILL_CHARS {
+        return Err(format!("Keep a skill under {MAX_SKILL_CHARS} characters. It is sent to the model each time it's used."));
+    }
+    Ok(())
+}
+
+pub fn skill_text(name: &str, custom: &[CustomSkill]) -> ToolResult {
+    let name = name.trim();
+    let body = SKILLS
+        .iter()
+        .find(|(n, _)| *n == name)
+        .map(|(_, b)| b.to_string())
+        .or_else(|| custom.iter().find(|c| c.name == name).map(|c| c.body.clone()));
+    match body {
+        Some(body) => ToolResult { text: body.trim().to_string(), ..ToolResult::simple(Outcome::Ok, "") },
         None => {
-            let names: Vec<&str> = SKILLS.iter().map(|(n, _)| *n).collect();
+            let names: Vec<&str> = SKILLS.iter().map(|(n, _)| *n).chain(custom.iter().map(|c| c.name.as_str())).collect();
             ToolResult::simple(Outcome::Failed, format!("No skill \"{name}\". Skills: {}.", names.join(", ")))
         }
     }
@@ -141,10 +187,10 @@ pub fn definitions() -> Value {
             "type": "function",
             "function": {
                 "name": "skill",
-                "description": "Short best-practice notes for doing something well and cheaply. Names: terminal, files, browser, screenshot, research, python.",
+                "description": "Short best-practice notes for doing something well and cheaply. Names: terminal, files, browser, screenshot, research, python, and any others the system prompt lists.",
                 "parameters": {
                     "type": "object",
-                    "properties": { "name": { "type": "string", "enum": ["terminal", "files", "browser", "screenshot", "research", "python"] } },
+                    "properties": { "name": { "type": "string" } },
                     "required": ["name"]
                 }
             }
@@ -275,6 +321,9 @@ impl ToolResult {
 #[derive(Default)]
 pub struct Approvals {
     map: Mutex<HashMap<String, oneshot::Sender<bool>>>,
+    /// "Approve until done": the rest of this turn runs without asking.
+    /// One turn runs at a time, so one flag is enough. Reset at each turn's start and end.
+    until_done: std::sync::atomic::AtomicBool,
 }
 
 impl Approvals {
@@ -284,11 +333,23 @@ impl Approvals {
         rx
     }
 
-    pub fn decide(&self, call_id: &str, approve: bool) -> bool {
+    /// `until_done` approves this call and every later one in the same turn.
+    pub fn decide(&self, call_id: &str, approve: bool, until_done: bool) -> bool {
+        if approve && until_done {
+            self.until_done.store(true, std::sync::atomic::Ordering::SeqCst);
+        }
         match self.lock().remove(call_id) {
             Some(tx) => tx.send(approve).is_ok(),
             None => false,
         }
+    }
+
+    pub fn until_done(&self) -> bool {
+        self.until_done.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    pub fn reset_turn(&self) {
+        self.until_done.store(false, std::sync::atomic::Ordering::SeqCst);
     }
 
     pub fn forget(&self, call_id: &str) {
@@ -718,16 +779,28 @@ mod tests {
 
     #[test]
     fn skills() {
-        let r = skill_text("browser");
+        let r = skill_text("browser", &[]);
         assert_eq!(r.outcome, Outcome::Ok);
         assert!(r.text.contains("snapshot"));
-        assert_eq!(skill_text("hacking").outcome, Outcome::Failed);
-        // The schema's enum must list every skill.
+        assert_eq!(skill_text("hacking", &[]).outcome, Outcome::Failed);
+        let mine = vec![CustomSkill { name: "git-commits".into(), body: "Small commits.".into() }];
+        assert_eq!(skill_text("git-commits", &mine).text, "Small commits.");
+        assert!(skill_text("nope", &mine).text.contains("git-commits"), "lists custom names");
+        // The schema's description must name every built-in skill.
         let defs = definitions();
         let skill = defs.as_array().unwrap().iter().find(|d| d["function"]["name"] == "skill").unwrap();
-        let names: Vec<&str> = skill["function"]["parameters"]["properties"]["name"]["enum"]
-            .as_array().unwrap().iter().map(|v| v.as_str().unwrap()).collect();
-        assert_eq!(names, SKILLS.iter().map(|(n, _)| *n).collect::<Vec<_>>());
+        let desc = skill["function"]["description"].as_str().unwrap();
+        for (n, _) in SKILLS {
+            assert!(desc.contains(n), "{n} missing from the skill description");
+        }
+        let ok = |n: &str, b: &str| check_skill(&CustomSkill { name: n.into(), body: b.into() });
+        assert!(ok("git-commits", "x").is_ok());
+        assert!(ok("Git", "x").is_err());
+        assert!(ok("browser", "x").is_err(), "built-in name");
+        assert!(ok("a", "x").is_err());
+        assert!(ok("-x", "x").is_err());
+        assert!(ok("notes", " ").is_err());
+        assert!(ok("big", &"x".repeat(MAX_SKILL_CHARS + 1)).is_err());
     }
 
     #[test]
@@ -824,8 +897,17 @@ mod tests {
     fn approvals() {
         let a = Approvals::default();
         let mut rx = a.register("c1");
-        assert!(a.decide("c1", true));
+        assert!(a.decide("c1", true, false));
         assert!(rx.try_recv().unwrap());
-        assert!(!a.decide("c1", true), "only once");
+        assert!(!a.decide("c1", true, false), "only once");
+        assert!(!a.until_done());
+        let _rx = a.register("c2");
+        a.decide("c2", true, true);
+        assert!(a.until_done());
+        a.reset_turn();
+        assert!(!a.until_done());
+        let _rx = a.register("c3");
+        a.decide("c3", false, true);
+        assert!(!a.until_done(), "a denial never turns it on");
     }
 }

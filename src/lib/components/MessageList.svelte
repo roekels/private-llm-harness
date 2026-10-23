@@ -1,5 +1,6 @@
 <script lang="ts">
   import { tick } from "svelte";
+  import { continueTurn } from "../chat.svelte";
   import { activeProfile, app } from "../state.svelte";
   import MessageView from "./MessageView.svelte";
 
@@ -91,6 +92,14 @@
     <MessageView role="assistant" content={app.streaming.content} reasoning={app.streaming.reasoning} streaming />
   {/if}
 
+  {#if app.paused != null && !app.generating}
+    <div class="paused" role="status">
+      <span>Paused after {app.paused} tool {app.paused === 1 ? "round" : "rounds"}. The model can carry on where it stopped.</span>
+      <button class="btn-primary small" onclick={() => void continueTurn()}>Continue</button>
+      <button class="btn-secondary small" onclick={() => (app.paused = null)}>Stop here</button>
+    </div>
+  {/if}
+
   {#if app.chatError}
     <p class="error" role="alert">{app.chatError}</p>
   {/if}
@@ -116,6 +125,30 @@
     font-size: 12px;
     color: var(--text-muted);
     text-align: center;
+  }
+
+  .paused {
+    max-width: 820px;
+    width: 100%;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--warn);
+    border-radius: var(--radius);
+    background: var(--surface);
+    font-size: 13px;
+  }
+
+  .paused span {
+    flex: 1;
+  }
+
+  .small {
+    padding: 2px var(--space-2);
+    font-size: 12px;
   }
 
   .compacting {

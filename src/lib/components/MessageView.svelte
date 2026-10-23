@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { boldRuns, fmtInt, segments } from "../format";
+  import { fmtInt } from "../format";
   import type { PendingTool } from "../state.svelte";
   import type { Message, MessageMeta, Role, ToolCall } from "../types";
+  import Markdown from "./Markdown.svelte";
   import ToolCard from "./ToolCard.svelte";
 
   interface Props {
@@ -29,8 +30,6 @@
     pending,
   }: Props = $props();
 
-  const parts = $derived(segments(content));
-  let copied = $state(-1);
 
   const metaLine = $derived.by(() => {
     if (!meta) return "";
@@ -46,16 +45,6 @@
     else if (meta.finishReason === "length") bits.push("Cut off at the reply limit");
     return bits.join(" · ");
   });
-
-  async function copy(text: string, i: number): Promise<void> {
-    try {
-      await navigator.clipboard.writeText(text);
-      copied = i;
-      setTimeout(() => (copied = -1), 1200);
-    } catch {
-      /* clipboard can be blocked; nothing else to do */
-    }
-  }
 </script>
 
 <article class="msg" data-role={role} class:faded>
@@ -78,19 +67,11 @@
 
   {#if content || streaming || !toolCalls?.length}
   <div class="content">
-    {#each parts as p, i (i)}
-      {#if p.kind === "code"}
-        <div class="code">
-          <div class="code-bar">
-            <span>{p.lang || "code"}</span>
-            <button type="button" onclick={() => copy(p.text, i)}>{copied === i ? "Copied" : "Copy"}</button>
-          </div>
-          <pre><code>{p.text}</code></pre>
-        </div>
-      {:else}
-        <span class="text">{#each boldRuns(p.text) as r, j (j)}{#if r.bold}<strong>{r.text}</strong>{:else}{r.text}{/if}{/each}</span>
-      {/if}
-    {/each}
+    {#if role === "user"}
+      <span class="text">{content}</span>
+    {:else}
+      <Markdown source={content} />
+    {/if}
     {#if streaming}<span class="caret" aria-hidden="true"></span>{/if}
   </div>
   {/if}
@@ -152,36 +133,6 @@
 
   .text {
     white-space: pre-wrap;
-  }
-
-  .code {
-    margin: var(--space-2) 0;
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    overflow: hidden;
-  }
-
-  .code-bar {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 2px var(--space-2);
-    background: var(--mist);
-    font-family: var(--font-micro);
-    font-size: 12px;
-  }
-
-  .code-bar button {
-    padding: 2px var(--space-2);
-    font-size: 12px;
-    color: var(--link);
-  }
-
-  .code pre {
-    margin: 0;
-    padding: var(--space-3);
-    overflow-x: auto;
-    background: var(--mist-25);
   }
 
   details {

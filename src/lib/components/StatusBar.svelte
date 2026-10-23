@@ -14,6 +14,25 @@
   // warm cache most turns process ~20 new tokens and overhead dominates.
   const newPromptTokens = $derived((last?.promptTokens ?? 0) - (last?.cachedTokens ?? 0));
   const showPromptSpeed = $derived(!!last?.promptPerSecond && newPromptTokens >= 200);
+
+  let exporting = $state(false);
+  let auditNote = $state("");
+  let noteTimer: ReturnType<typeof setTimeout> | undefined;
+  async function exportAudit(): Promise<void> {
+    const id = app.activeSessionId;
+    if (!id) return;
+    exporting = true;
+    try {
+      const path = await api.exportSession(id);
+      auditNote = `Saved to Downloads: ${path.split("/").pop() ?? path}`;
+    } catch (e) {
+      auditNote = `Export failed: ${errText(e)}`;
+    } finally {
+      exporting = false;
+      clearTimeout(noteTimer);
+      noteTimer = setTimeout(() => (auditNote = ""), 8000);
+    }
+  }
 </script>
 
 <footer class="bar">
@@ -34,6 +53,16 @@
   <span>{(last?.tokensPerSecond ?? 0).toFixed(1)} tok/s</span>
   {#if showPromptSpeed && last?.promptPerSecond && !app.browserOpen && !app.memoryOpen}<span>Prompt {fmtInt(last.promptPerSecond)} tok/s</span>{/if}
   <span class="spacer"></span>
+  {#if auditNote}<span class="note" role="status">{auditNote}</span>{/if}
+  {#if app.activeSessionId}
+    <button
+      class="files"
+      title="Export this session's full history (messages, tool calls and output) as a CSV file to Downloads"
+      disabled={exporting}
+      onclick={() => void exportAudit()}>Audit</button
+    >
+  {/if}
+  {#if app.untilDone}<span class="live" title="Steps run without asking until the model's final answer">Approving until done</span>{/if}
   {#if app.compacting}<span class="live">Compacting</span>{/if}
   {#if app.generating}<span class="live">Generating</span>{/if}
   <button
@@ -123,6 +152,14 @@
     padding: 2px var(--space-2);
     font-size: 12px;
     color: var(--link);
+  }
+
+  .note {
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+    flex-shrink: 1;
   }
 
   .live {

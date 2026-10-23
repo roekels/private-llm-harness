@@ -6,6 +6,7 @@
 npm install
 npm run tauri dev        # run the app with hot reload
 npm run check            # svelte-check + TypeScript
+npm test                 # Markdown parser checks
 npm run build            # frontend build only
 cd src-tauri && cargo clippy --all-targets && cargo test
 ```
@@ -36,6 +37,9 @@ cargo run --example chat -- --url http://127.0.0.1:8080/v1 --model local "Hello"
 #   --image FILE   attach an image to the first turn
 #   --tools        tools on, auto-approved   --deny   deny every tool call
 #   --net          allow internet in the sandbox   --macos   use the macOS sandbox
+#   --until-done   answer the first approval with Approve until done
+#   --steps N      tool rounds before the turn pauses
+#   --skill N=TEXT add your own skill      --export DIR   write the audit CSV to DIR
 
 # Sandbox VM with temporary folders (removes the VM after)
 cargo run --example vm -- status | patches | rebuild | browser
