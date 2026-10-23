@@ -1,0 +1,47 @@
+[package]
+name = "qwen35-harness"
+version = "0.7.1"
+description = "Ruan's Harness: sandboxed, token-lean agent harness for a self-hosted LLM"
+license = "MIT"
+repository = "https://github.com/roekels/private-llm-harness"
+authors = ["Ruan de Wit"]
+edition = "2024"
+
+[lib]
+# The _lib suffix keeps the lib name apart from the bin name.
+name = "qwen35_harness_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rusqlite = { version = "0.40.2", features = ["bundled"] }
+reqwest = { version = "0.13.5", default-features = false, features = ["json", "rustls", "stream"] }
+tokio = { version = "1.54.1", features = ["net", "time", "process", "macros", "sync", "io-util"] }
+url = "2.5.8"
+zeroize = "1.9.1"
+thiserror = "2.0.21"
+security-framework = "3.7.0"
+uuid = { version = "1.28.0", features = ["v4"] }
+libc = "0.2.191"
+sha2 = "0.11.1"
+
+# Size settings: https://tauri.app/concept/size/
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+panic = "abort"
+strip = true
+
+# Build-time code (proc macros) must keep its metadata, or rustc can't load it
+# ("can't find crate for phf_macros"). Only the app binary is stripped.
+[profile.release.build-override]
+strip = false
+
+[dev-dependencies]
+tokio = { version = "1.54.1", features = ["rt-multi-thread", "macros"] }

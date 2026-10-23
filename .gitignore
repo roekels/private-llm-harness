@@ -1,0 +1,17 @@
+.DS_Store
+node_modules
+/dist
+/releases
+.env
+.env.*
+!.env.example
+vite.config.js.timestamp-*
+
+# Private notes and setup details. Never published.
+/private/
+# Local build outputs
+/src-tauri/target/
+/src-tauri/gen/schemas/
+
+# Local agent tool config
+/.claude/

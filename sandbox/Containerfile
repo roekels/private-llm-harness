@@ -1,0 +1,35 @@
+# Sandbox VM image for qwen35-harness. Built locally by the app with Apple
+# `container`. The tag carries a hash of this folder, so edits rebuild it.
+FROM docker.io/library/debian:trixie-slim
+
+# The model's user. Same uid as the Mac user, so files in the mounted
+# workspace folder stay writable from both sides.
+ARG AGENT_UID=501
+ARG AGENT_GID=20
+
+ENV DEBIAN_FRONTEND=noninteractive LANG=C.UTF-8 LC_ALL=C.UTF-8
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      bash ca-certificates curl wget git python3 python3-venv python3-pip \
+      nodejs npm ripgrep jq less file unzip zip xz-utils procps iproute2 \
+      iptables chromium fonts-dejavu-core \
+ && rm -rf /var/lib/apt/lists/*
+
+# Browser helper (M4): DevTools over a local websocket. Own layer so the big
+# layer above stays cached.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends python3-websocket \
+ && rm -rf /var/lib/apt/lists/*
+
+RUN (getent group "${AGENT_GID}" >/dev/null || groupadd -g "${AGENT_GID}" agent) \
+ && useradd -m -u "${AGENT_UID}" -g "${AGENT_GID}" -s /bin/bash agent
+
+COPY qh /usr/local/bin/qh
+COPY qhb /usr/local/bin/qhb
+COPY qh-net /usr/local/sbin/qh-net
+COPY entrypoint /usr/local/sbin/qh-entrypoint
+RUN chmod 755 /usr/local/bin/qh /usr/local/bin/qhb /usr/local/sbin/qh-net /usr/local/sbin/qh-entrypoint \
+ && mkdir -p /work
+
+WORKDIR /work
+ENTRYPOINT ["/usr/local/sbin/qh-entrypoint"]

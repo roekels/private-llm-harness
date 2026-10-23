@@ -1,0 +1,61 @@
+#!/bin/bash
+# VM firewall. Run as root, by the app only (the model's user can't).
+#   qh-net off      loopback only
+#   qh-net on [N]   internet only: no LAN, tailnet, link-local, or the Mac.
+#                   N > 0: at most N new connections per second to any one
+#                   address (burst 2N); the rest is refused in the VM.
+#   qh-net status   prints the mode last applied ("failed" if rules didn't load)
+set -u
+mode="${1:-status}"
+rate="${2:-0}"
+case "$rate" in ''|*[!0-9]*) echo "qh-net: rate must be a number" >&2; exit 2 ;; esac
+if [ "$mode" = status ]; then
+  cat /run/qh-net 2>/dev/null || echo unknown
+  exit 0
+fi
+case "$mode" in on|off) ;; *) echo "usage: qh-net on|off|status" >&2; exit 2 ;; esac
+
+fail() { echo failed > /run/qh-net; echo "qh-net: $*" >&2; exit 1; }
+
+for t in iptables ip6tables; do
+  $t -P OUTPUT DROP && $t -P INPUT DROP && $t -P FORWARD DROP || fail "$t policy"
+  $t -F OUTPUT && $t -F INPUT && $t -F FORWARD || fail "$t flush"
+  $t -A OUTPUT -o lo -j ACCEPT
+  $t -A INPUT -i lo -j ACCEPT
+  $t -A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+  $t -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+done
+
+if [ "$mode" = on ]; then
+  # DNS only to the VM's own resolvers.
+  for ns in $(awk '/^nameserver/ {print $2}' /etc/resolv.conf); do
+    case "$ns" in *:*) t=ip6tables ;; *) t=iptables ;; esac
+    $t -A OUTPUT -d "$ns" -p udp --dport 53 -j ACCEPT
+    $t -A OUTPUT -d "$ns" -p tcp --dport 53 -j ACCEPT
+  done
+  # Private, tailnet (100.64/10), link-local, multicast and reserved: refused.
+  for net in 0.0.0.0/8 10.0.0.0/8 100.64.0.0/10 127.0.0.0/8 169.254.0.0/16 \
+             172.16.0.0/12 192.0.0.0/24 192.168.0.0/16 198.18.0.0/15 224.0.0.0/4 240.0.0.0/4; do
+    iptables -A OUTPUT -d "$net" -j REJECT || fail "reject $net"
+  done
+  for net in ::1/128 fc00::/7 fe80::/10 ff00::/8; do
+    ip6tables -A OUTPUT -d "$net" -j REJECT || fail "reject $net"
+  done
+  # Anti-block guard: cap new connections per destination (after DNS, which is allowed above).
+  if [ "$rate" -gt 0 ]; then
+    iptables -A OUTPUT -m conntrack --ctstate NEW -m hashlimit --hashlimit-above "$rate/sec" \
+      --hashlimit-burst "$((rate * 2))" --hashlimit-mode dstip --hashlimit-name qh4 -j REJECT || fail "rate limit"
+    ip6tables -A OUTPUT -m conntrack --ctstate NEW -m hashlimit --hashlimit-above "$rate/sec" \
+      --hashlimit-burst "$((rate * 2))" --hashlimit-mode dstip --hashlimit-name qh6 -j REJECT || fail "rate limit v6"
+  fi
+  iptables -A OUTPUT -j ACCEPT
+  ip6tables -A OUTPUT -j ACCEPT
+fi
+
+# First word is the mode; the app checks it.
+if [ "$mode" = on ] && [ "$rate" -gt 0 ]; then
+  echo "on limit=$rate" > /run/qh-net
+else
+  echo "$mode" > /run/qh-net
+fi
+cat /run/qh-net

@@ -1,0 +1,131 @@
+/* Theme tokens: a navy and blue palette. Components use these variables only. */
+:root {
+  --navy: #1d3f59;
+  --blue: #226bdb;
+  --blue-25: #c8daf6;
+  --mist: #e3e9f0;
+  --mist-60: #eef2f6;
+  --mist-25: #f8fafb;
+  --green: #2e766f;
+  --cream: #f5f1eb;
+  --yellow: #f1b346;
+  --red: #a01f45;
+  --white: #ffffff;
+
+  /* Roles */
+  --bg: var(--mist-25);
+  --surface: var(--white);
+  --surface-muted: var(--mist-60);
+  --border: var(--mist);
+  --text: var(--navy);
+  --text-muted: color-mix(in srgb, var(--navy) 78%, var(--white)); /* 5:1 on mist-60 */
+  --link: var(--blue);
+  --primary: var(--blue);
+  --on-primary: var(--white);
+  --nav-bg: var(--navy);
+  --nav-text: var(--white);
+  --nav-text-muted: var(--blue-25);
+  --nav-hover: color-mix(in srgb, var(--white) 10%, var(--navy));
+  --ok: var(--green);
+  --warn: var(--yellow);
+  --danger: var(--red);
+  --focus: var(--blue);
+
+  --radius: 4px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+
+  --font-display: "Helvetica Now Display", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-text: "Helvetica Now Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-micro: "Helvetica Now Micro", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+  --line: 1.4;
+
+  color-scheme: light;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/var(--line) var(--font-text);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  line-height: 1.2;
+  margin: 0;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: none;
+  padding: var(--space-2) var(--space-3);
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.btn-primary {
+  background: var(--primary);
+  color: var(--on-primary);
+  font-weight: 700;
+}
+
+.btn-secondary {
+  background: var(--surface);
+  border-color: var(--blue-25);
+  color: var(--text);
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+code,
+pre {
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

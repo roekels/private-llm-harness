@@ -1,0 +1,26 @@
+{
+  "name": "qwen35-harness",
+  "version": "0.7.1",
+  "private": true,
+  "license": "MIT",
+  "repository": "github:roekels/private-llm-harness",
+  "description": "Token-lean agent harness for a self-hosted LLM on a private network",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "check": "svelte-check --tsconfig ./tsconfig.json",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^7.1.2",
+    "@tauri-apps/cli": "^2",
+    "svelte": "^5.56.3",
+    "svelte-check": "^4.6.0",
+    "typescript": "~6.0.3",
+    "vite": "^8.0.16"
+  }
+}

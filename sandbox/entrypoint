@@ -1,0 +1,5 @@
+#!/bin/sh
+# Start closed. The app opens the network (internet only) when allowed.
+mkdir -p /tmp/qh && chmod 1777 /tmp/qh
+/usr/local/sbin/qh-net off || echo "qh-net failed" > /run/qh-net
+exec sleep infinity

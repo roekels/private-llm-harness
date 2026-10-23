@@ -1,0 +1,213 @@
+#!/usr/bin/env python3
+"""Tool helper inside the sandbox VM. The app calls it with `container exec`.
+
+  qh run <call-id> <timeout-s>   runs $QH_CMD with bash in the current folder
+  qh read <path> [offset]        up to 200 lines from line `offset`
+  qh write <path>                content from stdin
+  qh kill <call-id>              (root) kill a running command's process group
+
+The current folder is the session workspace (/work/<session id>). Paths may
+not leave it, not even through links.
+
+`run` prints one JSON header line, then the text the model sees. `read` and
+`write` print the text; exit code 0 means ok, 1 means the text is an error.
+"""
+import json
+import os
+import signal
+import subprocess
+import sys
+import time
+
+CLIP_HEAD = 1024
+CLIP_TAIL = 1024
+READ_MAX_LINES = 200
+READ_MAX_BYTES = 8 * 1024
+READ_MAX_FILE = 8 * 1024 * 1024
+WRITE_MAX = 1024 * 1024
+PIDS = "/tmp/qh"
+
+
+def fail(text):
+    sys.stdout.write(text)
+    sys.exit(1)
+
+
+def safe_id(call_id):
+    s = "".join(c for c in call_id if c.isalnum() or c in "-_")[:64]
+    return s or "call"
+
+
+def resolve(raw):
+    """Real path of `raw` inside the workspace, or fail."""
+    ws = os.path.realpath(os.getcwd())
+    raw = raw.strip()
+    if not raw:
+        fail("Path is empty.")
+    p = os.path.realpath(os.path.join(ws, raw))
+    if p != ws and not p.startswith(ws + os.sep):
+        fail("Path is outside the workspace. Use a path relative to the current folder.")
+    return ws, p
+
+
+def killpg(pid):
+    try:
+        os.killpg(pid, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError):
+        pass
+
+
+def cut_head(data, n):
+    if len(data) <= n:
+        return data
+    cut = data[:n]
+    i = cut.rfind(b"\n")
+    return cut[: i + 1] if i > n // 2 else cut
+
+
+def cut_tail(data, n):
+    if len(data) <= n:
+        return data
+    cut = data[-n:]
+    i = cut.find(b"\n")
+    return cut[i + 1 :] if 0 <= i < n // 2 else cut
+
+
+def run(call_id, timeout):
+    cmd = os.environ.get("QH_CMD", "")
+    sid = safe_id(call_id)
+    os.makedirs(".harness/out", exist_ok=True)
+    out_rel = f".harness/out/{sid}.txt"
+    pidfile = f"{PIDS}/{sid}"
+    start = time.time()
+    timed_out = False
+    with open(out_rel, "wb") as out:
+        p = subprocess.Popen(
+            ["/bin/bash", "-c", cmd],
+            stdin=subprocess.DEVNULL,
+            stdout=out,
+            stderr=subprocess.STDOUT,  # one stream, in order
+            start_new_session=True,  # own process group, killed as a whole
+        )
+        try:
+            with open(pidfile, "w") as f:
+                f.write(str(p.pid))
+        except OSError:
+            pass
+        try:
+            code = p.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            timed_out = True
+            killpg(p.pid)
+            code = p.wait()
+        killpg(p.pid)  # leftovers started with &
+        try:
+            os.unlink(pidfile)
+        except OSError:
+            pass
+
+    size = os.path.getsize(out_rel)
+    with open(out_rel, "rb") as f:
+        if size <= CLIP_HEAD + CLIP_TAIL + 256:
+            data = f.read()
+            full = None
+        else:
+            head = cut_head(f.read(CLIP_HEAD * 2), CLIP_HEAD)
+            f.seek(max(0, size - CLIP_TAIL * 2))
+            tail = cut_tail(f.read(), CLIP_TAIL)
+            skipped = size - len(head) - len(tail)
+            note = f"\n[... {skipped} bytes clipped. Full output: {out_rel} (use read with offset) ...]\n"
+            data = head + note.encode() + tail
+            full = out_rel
+    if full is None:
+        os.unlink(out_rel)
+
+    header = {
+        "exit": code if code >= 0 else None,
+        "signal": -code if code < 0 else None,
+        "timedOut": timed_out,
+        "ms": int((time.time() - start) * 1000),
+        "bytes": size,
+        "full": full,
+    }
+    sys.stdout.write(json.dumps(header) + "\n")
+    sys.stdout.write(data.decode("utf-8", "replace"))
+
+
+def read(raw, offset):
+    _, p = resolve(raw)
+    if not os.path.exists(p):
+        fail(f"Can't read {raw}: no such file.")
+    if os.path.isdir(p):
+        fail(f"{raw} is a folder. Use sh with ls to list it.")
+    if os.path.getsize(p) > READ_MAX_FILE:
+        fail(f"{raw} is larger than 8 MB. Use sh with head, tail or grep.")
+    with open(p, "rb") as f:
+        lines = f.read().decode("utf-8", "replace").splitlines()
+    total = len(lines)
+    if total == 0:
+        sys.stdout.write(f"[{raw} is empty]")
+        return
+    if offset > total:
+        sys.stdout.write(f"[{raw} has only {total} lines]")
+        return
+    out, size, last = [], 0, offset - 1
+    for i in range(offset - 1, min(total, offset - 1 + READ_MAX_LINES)):
+        line = lines[i]
+        if size + len(line) + 1 > READ_MAX_BYTES and i > offset - 1:
+            break
+        out.append(line)
+        size += len(line) + 1
+        last = i
+    text = "\n".join(out) + "\n"
+    if offset > 1 or last + 1 < total:
+        text += f"[lines {offset}-{last + 1} of {total}]"
+    sys.stdout.write(text)
+
+
+def write(raw):
+    content = sys.stdin.buffer.read(WRITE_MAX + 1)
+    if len(content) > WRITE_MAX:
+        fail("Content is larger than 1 MB.")
+    ws, p = resolve(raw)
+    if p == ws:
+        fail("Give a file name.")
+    lexical = os.path.join(ws, raw.strip())
+    if os.path.islink(lexical):
+        fail(f"{raw} is a link. Write to a real file.")
+    if os.path.isdir(p):
+        fail(f"{raw} is a folder.")
+    os.makedirs(os.path.dirname(p), exist_ok=True)
+    with open(p, "wb") as f:
+        f.write(content)
+    sys.stdout.write(f"Wrote {len(content)} bytes to {os.path.relpath(p, ws)}.")
+
+
+def kill(call_id):
+    try:
+        with open(f"{PIDS}/{safe_id(call_id)}") as f:
+            pid = int(f.read().strip())
+    except (OSError, ValueError):
+        sys.stdout.write("not running")
+        return
+    killpg(pid)
+    sys.stdout.write("killed")
+
+
+def main(argv):
+    if len(argv) >= 3 and argv[0] == "run":
+        run(argv[1], float(argv[2]))
+    elif len(argv) >= 2 and argv[0] == "read":
+        offset = int(argv[2]) if len(argv) > 2 and argv[2].isdigit() else 1
+        read(argv[1], max(1, offset))
+    elif len(argv) == 2 and argv[0] == "write":
+        write(argv[1])
+    elif len(argv) == 2 and argv[0] == "kill":
+        kill(argv[1])
+    else:
+        sys.stderr.write(__doc__)
+        sys.exit(2)
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])
